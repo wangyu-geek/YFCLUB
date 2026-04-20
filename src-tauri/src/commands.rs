@@ -651,7 +651,7 @@ fn gift_redeem_impl(state: &AppState, payload: RedeemPayload) -> Result<CommandR
         .optional()?
         .ok_or_else(|| anyhow!("礼品不存在"))?;
     if gift.2 != "ACTIVE" {
-        return Err(anyhow!("礼品已停用，无法兑换"));
+        return Err(anyhow!("礼品已禁用，无法兑换"));
     }
     if gift.3 {
         if payload.qty != 1 {

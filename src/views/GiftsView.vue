@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useClubAppContext } from "../composables/useClubApp";
 
-const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm, formatCodeLabel } = useClubAppContext();
+const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm, formatGiftStatusLabel } = useClubAppContext();
 </script>
 
 <template>
@@ -21,7 +21,7 @@ const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm, formatCodeLabel 
             <span class="tag">{{ gift.pointsCost }} 分</span>
           </div>
           <div class="muted">
-            状态 {{ formatCodeLabel(gift.status) }} /
+            状态 {{ formatGiftStatusLabel(gift.status) }} /
             {{ gift.uniquePerMember ? "每会员限兑一次" : "可重复兑换" }}
           </div>
           <div class="toolbar">
@@ -53,7 +53,7 @@ const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm, formatCodeLabel 
           <span class="label">状态</span>
           <select v-model="giftForm.status">
             <option value="ACTIVE">启用</option>
-            <option value="INACTIVE">停用</option>
+            <option value="INACTIVE">禁用</option>
           </select>
         </label>
         <div class="field">

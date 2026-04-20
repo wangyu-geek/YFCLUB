@@ -48,7 +48,7 @@ onMounted(() => {
       <div>
         <h1 class="hero-title">永丰文体会员管理系统</h1>
         <p class="hero-subtitle">
-          现在改为 `vue-router` 驱动的多分区界面，每个业务模块都有自己的独立路由和内容区域。
+          欢迎光临。
         </p>
       </div>
       <div class="hero-badge-group">

@@ -1,6 +1,6 @@
 import { computed, inject, ref, type InjectionKey } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
-import { formatCodeLabel, localizeOperationLogItem } from "../localization";
+import { formatCodeLabel, formatGiftStatusLabel, localizeOperationLogItem } from "../localization";
 import {
   backupCreate,
   backupRestore,
@@ -504,6 +504,7 @@ export function useClubApp() {
     recentActivityPreview,
     syncRedeemFormWithGiftRule,
     formatCodeLabel,
+    formatGiftStatusLabel,
     formatMoney,
     formatDate,
     resetGiftForm,

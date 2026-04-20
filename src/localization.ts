@@ -117,6 +117,19 @@ export function formatCodeLabel(value: string | null | undefined) {
   return codeLabels[value] ?? value;
 }
 
+export function formatGiftStatusLabel(value: string | null | undefined) {
+  if (!value) {
+    return "无";
+  }
+  if (value === "ACTIVE") {
+    return "启用";
+  }
+  if (value === "INACTIVE") {
+    return "禁用";
+  }
+  return formatCodeLabel(value);
+}
+
 export function formatOperationLogSummary(summary: string | null | undefined, errorMessage?: string | null) {
   if (summary?.trim()) {
     try {
