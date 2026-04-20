@@ -1,0 +1,17 @@
+*.exe
+*.mdb
+node_modules/
+dist/*
+!dist/.gitkeep
+data/
+logs/
+config/
+src-tauri/target/
+src-tauri/gen/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.pdb
+Thumbs.db
+*.lnk
