@@ -1,5 +1,6 @@
 import { computed, inject, ref, type InjectionKey } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
+import { formatCodeLabel, localizeOperationLogItem } from "../localization";
 import {
   backupCreate,
   backupRestore,
@@ -98,6 +99,7 @@ export function useClubApp() {
     pointsCost: 0,
     stockQty: 0,
     status: "ACTIVE",
+    uniquePerMember: true,
     remark: ""
   });
 
@@ -108,10 +110,20 @@ export function useClubApp() {
       : "未选择会员"
   );
   const activeGiftCount = computed(() => gifts.value.filter((item) => item.status === "ACTIVE").length);
-  const totalGiftStock = computed(() =>
-    gifts.value.reduce((sum, item) => sum + Number(item.stockQty ?? 0), 0)
+  const redeemedGiftIdSet = computed(() => new Set(selectedDetail.value?.redeemedGiftIds ?? []));
+  const availableRedeemGifts = computed(() =>
+    gifts.value.filter((item) => {
+      if (item.status !== "ACTIVE" || item.id == null) {
+        return false;
+      }
+      return !(item.uniquePerMember && redeemedGiftIdSet.value.has(item.id));
+    })
   );
-  const recentActivityPreview = computed(() => logs.value.slice(0, 6));
+  const selectedRedeemGift = computed(
+    () => gifts.value.find((item) => item.id === redeemForm.value.giftId) ?? null
+  );
+  const localizedLogs = computed(() => logs.value.map((item) => localizeOperationLogItem(item)));
+  const recentActivityPreview = computed(() => localizedLogs.value.slice(0, 6));
 
   function setSuccess(message: string) {
     successMessage.value = message;
@@ -143,6 +155,7 @@ export function useClubApp() {
       pointsCost: 0,
       stockQty: 0,
       status: "ACTIVE",
+      uniquePerMember: true,
       remark: ""
     };
   }
@@ -301,10 +314,14 @@ export function useClubApp() {
 
   function openRedeemModal() {
     if (!selectedMember.value) return;
-    const firstGift = gifts.value.find((item) => item.status === "ACTIVE") ?? gifts.value[0];
+    const firstGift = availableRedeemGifts.value[0];
+    if (!firstGift?.id) {
+      setError("当前没有可兑换的礼品，或该会员已兑换过全部唯一礼品。");
+      return;
+    }
     redeemForm.value = {
       memberId: selectedMember.value.id,
-      giftId: firstGift?.id ?? 0,
+      giftId: firstGift.id,
       qty: 1,
       operatorName: settings.value.defaultOperator,
       remark: ""
@@ -312,11 +329,22 @@ export function useClubApp() {
     redeemModalOpen.value = true;
   }
 
+  function syncRedeemFormWithGiftRule() {
+    if (selectedRedeemGift.value?.uniquePerMember) {
+      redeemForm.value.qty = 1;
+      return;
+    }
+    if (redeemForm.value.qty <= 0) {
+      redeemForm.value.qty = 1;
+    }
+  }
+
   async function saveRedeem() {
     try {
+      const qty = selectedRedeemGift.value?.uniquePerMember ? 1 : Number(redeemForm.value.qty);
       const result = await giftRedeem({
         ...redeemForm.value,
-        qty: Number(redeemForm.value.qty)
+        qty
       });
       redeemModalOpen.value = false;
       setSuccess(result.message);
@@ -327,7 +355,10 @@ export function useClubApp() {
   }
 
   function editGift(gift: GiftRecord) {
-    giftForm.value = { ...gift };
+    giftForm.value = {
+      ...gift,
+      uniquePerMember: gift.uniquePerMember ?? false
+    };
   }
 
   async function saveGiftForm() {
@@ -467,8 +498,12 @@ export function useClubApp() {
     selectedMember,
     activeMemberLabel,
     activeGiftCount,
-    totalGiftStock,
+    availableRedeemGifts,
+    selectedRedeemGift,
+    localizedLogs,
     recentActivityPreview,
+    syncRedeemFormWithGiftRule,
+    formatCodeLabel,
     formatMoney,
     formatDate,
     resetGiftForm,

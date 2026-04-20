@@ -11,7 +11,6 @@ const {
   formatMoney,
   formatDate,
   activeGiftCount,
-  totalGiftStock,
   settings,
   openCreateMember
 } = useClubAppContext();
@@ -94,11 +93,11 @@ function goTo(name: "members" | "gifts" | "settings" | "logs") {
           <div class="log-list">
             <div v-for="item in recentActivityPreview" :key="item.id" class="log-item">
               <div class="row">
-                <strong>{{ item.moduleName }} / {{ item.actionName }}</strong>
-                <span class="tag">{{ item.resultStatus }}</span>
+                <strong>{{ item.moduleLabel }} / {{ item.actionLabel }}</strong>
+                <span class="tag">{{ item.statusLabel }}</span>
               </div>
               <div class="muted">{{ item.operatorName }} / {{ formatDate(item.createdAt) }}</div>
-              <div class="muted">{{ item.requestSummary || item.errorMessage || "无附加信息" }}</div>
+              <div class="muted">{{ item.summaryLabel }}</div>
             </div>
             <div v-if="!recentActivityPreview.length" class="notice">当前没有操作日志。</div>
           </div>
@@ -126,8 +125,8 @@ function goTo(name: "members" | "gifts" | "settings" | "logs") {
             </button>
             <button class="shortcut-card" type="button" @click="goTo('gifts')">
               <span class="shortcut-caption">GIFTS</span>
-              <strong>维护礼品库存</strong>
-              <span>查看兑换礼品与库存余量</span>
+              <strong>维护礼品配置</strong>
+              <span>查看兑换礼品、积分成本与兑换规则</span>
             </button>
             <button class="shortcut-card" type="button" @click="goTo('settings')">
               <span class="shortcut-caption">SYSTEM</span>
@@ -148,10 +147,6 @@ function goTo(name: "members" | "gifts" | "settings" | "logs") {
             <div class="mini-stat">
               启用礼品
               <strong>{{ activeGiftCount }}</strong>
-            </div>
-            <div class="mini-stat">
-              礼品库存
-              <strong>{{ totalGiftStock }}</strong>
             </div>
             <div class="mini-stat">
               默认操作员

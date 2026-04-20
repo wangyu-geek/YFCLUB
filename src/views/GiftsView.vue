@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useClubAppContext } from "../composables/useClubApp";
 
-const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm } = useClubAppContext();
+const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm, formatCodeLabel } = useClubAppContext();
 </script>
 
 <template>
@@ -10,7 +10,7 @@ const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm } = useClubAppCon
       <div class="panel-head">
         <div>
           <h3 class="panel-title">礼品总览</h3>
-          <p class="panel-subtitle">浏览礼品库存、状态与积分成本</p>
+          <p class="panel-subtitle">浏览礼品状态、积分成本与兑换规则</p>
         </div>
       </div>
 
@@ -20,7 +20,10 @@ const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm } = useClubAppCon
             <strong>{{ gift.giftName }}</strong>
             <span class="tag">{{ gift.pointsCost }} 分</span>
           </div>
-          <div class="muted">库存 {{ gift.stockQty }} / 状态 {{ gift.status }}</div>
+          <div class="muted">
+            状态 {{ formatCodeLabel(gift.status) }} /
+            {{ gift.uniquePerMember ? "每会员限兑一次" : "可重复兑换" }}
+          </div>
           <div class="toolbar">
             <button class="ghost-button" type="button" @click="editGift(gift)">编辑礼品</button>
           </div>
@@ -33,7 +36,7 @@ const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm } = useClubAppCon
       <div class="panel-head">
         <div>
           <h3 class="panel-title">{{ giftForm.id ? "编辑礼品" : "新增礼品" }}</h3>
-          <p class="panel-subtitle">维护积分、库存与启停状态</p>
+          <p class="panel-subtitle">维护积分、启停状态与兑换规则</p>
         </div>
       </div>
 
@@ -47,16 +50,19 @@ const { gifts, giftForm, editGift, saveGiftForm, resetGiftForm } = useClubAppCon
           <input v-model.number="giftForm.pointsCost" type="number" min="0" />
         </label>
         <label class="field">
-          <span class="label">库存</span>
-          <input v-model.number="giftForm.stockQty" type="number" min="0" />
-        </label>
-        <label class="field">
           <span class="label">状态</span>
           <select v-model="giftForm.status">
             <option value="ACTIVE">启用</option>
             <option value="INACTIVE">停用</option>
           </select>
         </label>
+        <div class="field">
+          <span class="label">兑换规则</span>
+          <label class="checkbox-row">
+            <input v-model="giftForm.uniquePerMember" type="checkbox" />
+            兑换一次
+          </label>
+        </div>
         <label class="field full">
           <span class="label">备注</span>
           <textarea v-model="giftForm.remark" />

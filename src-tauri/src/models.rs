@@ -82,6 +82,7 @@ pub struct GiftRecord {
     pub points_cost: i64,
     pub stock_qty: i64,
     pub status: Option<String>,
+    pub unique_per_member: Option<bool>,
     pub remark: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
@@ -110,6 +111,7 @@ pub struct MemberDetailData {
     pub recent_consumptions: Vec<ConsumptionRecord>,
     pub recent_redemptions: Vec<GiftRedemption>,
     pub recent_ledger: Vec<PointsLedgerEntry>,
+    pub redeemed_gift_ids: Vec<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -322,6 +324,8 @@ pub struct ImportGift {
     pub points_cost: i64,
     pub stock_qty: Option<i64>,
     pub status: Option<String>,
+    #[serde(alias = "unique_per_member")]
+    pub unique_per_member: Option<bool>,
     pub remark: Option<String>,
 }
 

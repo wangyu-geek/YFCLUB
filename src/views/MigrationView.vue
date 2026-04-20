@@ -7,7 +7,8 @@ const {
   runMigrationPrecheck,
   precheck,
   executeMigrationRun,
-  migrationReport
+  migrationReport,
+  formatCodeLabel
 } = useClubAppContext();
 </script>
 
@@ -48,7 +49,7 @@ const {
           <strong>批次 {{ precheck.batchNo }}</strong>
           <div class="muted">
             会员 {{ precheck.memberCount }} / 消费 {{ precheck.consumptionCount }} / 兑换 {{ precheck.redemptionCount }} /
-            礼品 {{ precheck.giftCount }} / 模式 {{ precheck.importMode }}
+            礼品 {{ precheck.giftCount }} / 模式 {{ formatCodeLabel(precheck.importMode) }}
           </div>
           <div class="muted">可执行：{{ precheck.canExecute ? "是" : "否" }}</div>
         </div>
@@ -60,7 +61,7 @@ const {
 
       <div v-if="migrationReport" class="warning-list">
         <div class="warning-item">
-          <strong>导入结果 {{ migrationReport.batch.status }}</strong>
+          <strong>导入结果 {{ formatCodeLabel(migrationReport.batch.status) }}</strong>
           <div class="muted">成功 {{ migrationReport.batch.successCount }} / 失败 {{ migrationReport.batch.failedCount }}</div>
         </div>
         <div v-for="error in migrationReport.errors" :key="`report-${error.entityType}-${error.legacyPk}-${error.errorCode}`" class="warning-item">

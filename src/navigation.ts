@@ -27,7 +27,7 @@ export const sectionOptions: SectionOption[] = [
     key: "gifts",
     label: "礼品中心",
     caption: "Gifts",
-    description: "浏览礼品库存并维护兑换配置",
+    description: "浏览礼品信息并维护兑换配置",
     to: "/gifts"
   },
   {

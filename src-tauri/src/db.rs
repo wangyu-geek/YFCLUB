@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
 use std::path::Path;
 
-const CURRENT_SCHEMA_VERSION: i64 = 1;
+const CURRENT_SCHEMA_VERSION: i64 = 2;
 
 pub fn open_connection(db_path: &Path) -> Result<Connection> {
     let conn = Connection::open(db_path)
@@ -32,23 +32,68 @@ pub fn initialize_database(state: &AppState) -> Result<()> {
 
     let conn = open_connection(&resolved_db_path)?;
     conn.execute_batch(include_str!("../migrations/001_init.sql"))?;
-
-    let applied: i64 = conn.query_row(
-        "SELECT COUNT(1) FROM schema_versions WHERE version_no = ?1",
-        params![CURRENT_SCHEMA_VERSION],
-        |row| row.get(0),
-    )?;
-
-    if applied == 0 {
-        conn.execute(
-            "INSERT INTO schema_versions(version_no, description, applied_at) VALUES(?1, ?2, ?3)",
-            params![CURRENT_SCHEMA_VERSION, "initial schema", now_string()],
-        )?;
-    }
+    ensure_schema_version(&conn, 1, "initial schema")?;
+    apply_gift_unique_redemption_migration(&conn)?;
 
     seed_settings(&conn, &config, state)?;
     seed_operator(&conn, &config)?;
     Ok(())
+}
+
+fn apply_gift_unique_redemption_migration(conn: &Connection) -> Result<()> {
+    if has_schema_version(conn, CURRENT_SCHEMA_VERSION)? {
+        return Ok(());
+    }
+
+    if !table_has_column(conn, "gifts", "unique_per_member")? {
+        conn.execute(
+            "ALTER TABLE gifts ADD COLUMN unique_per_member INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_redemptions_member_gift ON gift_redemptions(member_id, gift_id)",
+        [],
+    )?;
+    ensure_schema_version(conn, CURRENT_SCHEMA_VERSION, "gift unique redemption")?;
+    Ok(())
+}
+
+fn has_schema_version(conn: &Connection, version: i64) -> Result<bool> {
+    let applied: i64 = conn.query_row(
+        "SELECT COUNT(1) FROM schema_versions WHERE version_no = ?1",
+        params![version],
+        |row| row.get(0),
+    )?;
+    Ok(applied > 0)
+}
+
+fn ensure_schema_version(conn: &Connection, version: i64, description: &str) -> Result<()> {
+    if has_schema_version(conn, version)? {
+        return Ok(());
+    }
+
+    conn.execute(
+        "INSERT INTO schema_versions(version_no, description, applied_at) VALUES(?1, ?2, ?3)",
+        params![version, description, now_string()],
+    )?;
+    Ok(())
+}
+
+fn table_has_column(conn: &Connection, table_name: &str, column_name: &str) -> Result<bool> {
+    let pragma = format!("PRAGMA table_info({table_name})");
+    let mut stmt = conn.prepare(&pragma)?;
+    let mut rows = stmt.query([])?;
+
+    while let Some(row) = rows.next()? {
+        let existing_name: String = row.get(1)?;
+        if existing_name == column_name {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 fn seed_settings(conn: &Connection, config: &AppConfig, state: &AppState) -> Result<()> {

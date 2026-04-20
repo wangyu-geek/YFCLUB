@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS gifts (
   points_cost INTEGER NOT NULL,
   stock_qty INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'ACTIVE',
+  unique_per_member INTEGER NOT NULL DEFAULT 0,
   remark TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -95,6 +96,7 @@ CREATE TABLE IF NOT EXISTS gift_redemptions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_redemptions_member_id ON gift_redemptions(member_id);
+CREATE INDEX IF NOT EXISTS idx_redemptions_member_gift ON gift_redemptions(member_id, gift_id);
 CREATE INDEX IF NOT EXISTS idx_redemptions_created_at ON gift_redemptions(created_at);
 CREATE INDEX IF NOT EXISTS idx_redemptions_legacy_redemption_id ON gift_redemptions(legacy_redemption_id);
 

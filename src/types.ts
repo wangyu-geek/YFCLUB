@@ -21,6 +21,7 @@ export interface MemberDetailData {
   recentConsumptions: ConsumptionRecord[];
   recentRedemptions: GiftRedemption[];
   recentLedger: PointsLedgerEntry[];
+  redeemedGiftIds: number[];
 }
 
 export interface MemberRecord {
@@ -97,6 +98,7 @@ export interface GiftRecord {
   pointsCost: number;
   stockQty: number;
   status?: string;
+  uniquePerMember?: boolean;
   remark?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -162,6 +164,14 @@ export interface OperationLogItem {
   resultStatus: string;
   errorMessage: string | null;
   createdAt: string;
+}
+
+export interface LocalizedOperationLogItem extends OperationLogItem {
+  moduleLabel: string;
+  actionLabel: string;
+  targetTypeLabel: string | null;
+  statusLabel: string;
+  summaryLabel: string;
 }
 
 export interface OperationLogFilter {

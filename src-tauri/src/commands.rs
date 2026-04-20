@@ -247,12 +247,14 @@ fn member_get_detail_impl(state: &AppState, member_id: i64) -> Result<MemberDeta
     let recent_consumptions = query_recent_consumptions(&conn, member_id)?;
     let recent_redemptions = query_recent_redemptions(&conn, member_id)?;
     let recent_ledger = query_recent_ledger(&conn, member_id)?;
+    let redeemed_gift_ids = query_redeemed_gift_ids(&conn, member_id)?;
 
     Ok(MemberDetailData {
         member,
         recent_consumptions,
         recent_redemptions,
         recent_ledger,
+        redeemed_gift_ids,
     })
 }
 
@@ -524,7 +526,7 @@ fn consume_create_impl(state: &AppState, payload: ConsumePayload) -> Result<Comm
 fn gift_list_impl(state: &AppState) -> Result<Vec<GiftRecord>> {
     let conn = open_connection(&state.db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, gift_name, points_cost, stock_qty, status, remark, created_at, updated_at
+        "SELECT id, gift_name, points_cost, stock_qty, status, unique_per_member, remark, created_at, updated_at
          FROM gifts
          ORDER BY status = 'ACTIVE' DESC, updated_at DESC, id DESC",
     )?;
@@ -535,9 +537,10 @@ fn gift_list_impl(state: &AppState) -> Result<Vec<GiftRecord>> {
             points_cost: row.get(2)?,
             stock_qty: row.get(3)?,
             status: Some(row.get(4)?),
-            remark: row.get(5)?,
-            created_at: Some(row.get(6)?),
-            updated_at: Some(row.get(7)?),
+            unique_per_member: Some(row.get::<_, i64>(5)? != 0),
+            remark: row.get(6)?,
+            created_at: Some(row.get(7)?),
+            updated_at: Some(row.get(8)?),
         })
     })?;
     let mut items = Vec::new();
@@ -551,8 +554,8 @@ fn gift_save_impl(state: &AppState, payload: GiftRecord) -> Result<CommandResult
     if payload.gift_name.trim().is_empty() {
         return Err(anyhow!("礼品名称不能为空"));
     }
-    if payload.points_cost < 0 || payload.stock_qty < 0 {
-        return Err(anyhow!("礼品积分或库存不能为负数"));
+    if payload.points_cost < 0 {
+        return Err(anyhow!("礼品积分不能为负数"));
     }
 
     let mut conn = open_connection(&state.db_path)?;
@@ -561,13 +564,14 @@ fn gift_save_impl(state: &AppState, payload: GiftRecord) -> Result<CommandResult
     let gift_id = if let Some(id) = payload.id {
         tx.execute(
             "UPDATE gifts
-             SET gift_name = ?1, points_cost = ?2, stock_qty = ?3, status = ?4, remark = ?5, updated_at = ?6
-             WHERE id = ?7",
+             SET gift_name = ?1, points_cost = ?2, stock_qty = ?3, status = ?4, unique_per_member = ?5, remark = ?6, updated_at = ?7
+             WHERE id = ?8",
             params![
                 payload.gift_name.trim(),
                 payload.points_cost,
                 payload.stock_qty,
                 payload.status.clone().unwrap_or_else(|| "ACTIVE".to_string()),
+                if payload.unique_per_member.unwrap_or(false) { 1 } else { 0 },
                 normalize_optional_text(payload.remark.clone()),
                 now,
                 id
@@ -576,13 +580,14 @@ fn gift_save_impl(state: &AppState, payload: GiftRecord) -> Result<CommandResult
         id
     } else {
         tx.execute(
-            "INSERT INTO gifts(gift_name, points_cost, stock_qty, status, remark, created_at, updated_at)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+            "INSERT INTO gifts(gift_name, points_cost, stock_qty, status, unique_per_member, remark, created_at, updated_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
             params![
                 payload.gift_name.trim(),
                 payload.points_cost,
                 payload.stock_qty,
                 payload.status.clone().unwrap_or_else(|| "ACTIVE".to_string()),
+                if payload.unique_per_member.unwrap_or(false) { 1 } else { 0 },
                 normalize_optional_text(payload.remark.clone()),
                 now
             ],
@@ -632,24 +637,34 @@ fn gift_redeem_impl(state: &AppState, payload: RedeemPayload) -> Result<CommandR
 
     let gift = tx
         .query_row(
-            "SELECT gift_name, points_cost, stock_qty, status FROM gifts WHERE id = ?1",
+            "SELECT gift_name, points_cost, status, unique_per_member FROM gifts WHERE id = ?1",
             params![payload.gift_id],
             |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, i64>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, i64>(3)? != 0,
                 ))
             },
         )
         .optional()?
         .ok_or_else(|| anyhow!("礼品不存在"))?;
-    if gift.3 != "ACTIVE" {
+    if gift.2 != "ACTIVE" {
         return Err(anyhow!("礼品已停用，无法兑换"));
     }
-    if gift.2 < payload.qty {
-        return Err(anyhow!("礼品库存不足"));
+    if gift.3 {
+        if payload.qty != 1 {
+            return Err(anyhow!("兑换一次礼品每位会员仅可兑换 1 件"));
+        }
+        let redeemed_count: i64 = tx.query_row(
+            "SELECT COUNT(1) FROM gift_redemptions WHERE member_id = ?1 AND gift_id = ?2",
+            params![payload.member_id, payload.gift_id],
+            |row| row.get(0),
+        )?;
+        if redeemed_count > 0 {
+            return Err(anyhow!("该礼品为兑换一次，当前会员已兑换过"));
+        }
     }
 
     let points_used = gift.1 * payload.qty;
@@ -678,10 +693,6 @@ fn gift_redeem_impl(state: &AppState, payload: RedeemPayload) -> Result<CommandR
     tx.execute(
         "UPDATE members SET points_balance = ?1, updated_at = ?2 WHERE id = ?3",
         params![new_balance, now, payload.member_id],
-    )?;
-    tx.execute(
-        "UPDATE gifts SET stock_qty = stock_qty - ?1, updated_at = ?2 WHERE id = ?3",
-        params![payload.qty, now, payload.gift_id],
     )?;
     tx.execute(
         "INSERT INTO points_ledger(member_id, change_type, points_delta, balance_after, source_type, source_id, operator_name, remark, created_at)
@@ -1308,6 +1319,20 @@ fn query_recent_redemptions(conn: &Connection, member_id: i64) -> Result<Vec<Gif
     Ok(items)
 }
 
+fn query_redeemed_gift_ids(conn: &Connection, member_id: i64) -> Result<Vec<i64>> {
+    let mut stmt = conn.prepare(
+        "SELECT DISTINCT gift_id
+         FROM gift_redemptions
+         WHERE member_id = ?1 AND gift_id IS NOT NULL",
+    )?;
+    let rows = stmt.query_map(params![member_id], |row| row.get(0))?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
+}
+
 fn query_recent_ledger(conn: &Connection, member_id: i64) -> Result<Vec<PointsLedgerEntry>> {
     let mut stmt = conn.prepare(
         "SELECT id, member_id, change_type, points_delta, balance_after, source_type, source_id, operator_name, remark, created_at
@@ -1601,13 +1626,14 @@ fn import_gift(tx: &Transaction<'_>, batch_no: &str, ctx: &mut ImportContext, gi
     }
 
     tx.execute(
-        "INSERT INTO gifts(gift_name, points_cost, stock_qty, status, remark, created_at, updated_at)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        "INSERT INTO gifts(gift_name, points_cost, stock_qty, status, unique_per_member, remark, created_at, updated_at)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
         params![
             gift.gift_name.trim(),
             gift.points_cost,
             gift.stock_qty.unwrap_or(0),
             gift.status.clone().unwrap_or_else(|| "ACTIVE".to_string()),
+            if gift.unique_per_member.unwrap_or(false) { 1 } else { 0 },
             normalize_optional_text(gift.remark.clone()),
             now_string()
         ],

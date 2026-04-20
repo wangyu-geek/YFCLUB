@@ -496,6 +496,21 @@ a {
   grid-column: 1 / -1;
 }
 
+.checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: #102a43;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
 .label {
   font-size: 13px;
   color: var(--ink-soft);

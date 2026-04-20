@@ -27,7 +27,10 @@ const {
   saveConsume,
   redeemModalOpen,
   redeemForm,
-  saveRedeem
+  saveRedeem,
+  availableRedeemGifts,
+  selectedRedeemGift,
+  syncRedeemFormWithGiftRule
 } = app;
 
 const activeSectionMeta = computed(
@@ -180,15 +183,22 @@ onMounted(() => {
       <div class="section-grid">
         <label class="field">
           <span class="label">礼品</span>
-          <select v-model.number="redeemForm.giftId">
-            <option v-for="gift in gifts" :key="gift.id || gift.giftName" :value="gift.id || 0">
-              {{ gift.giftName }} / {{ gift.pointsCost }} 分 / 库存 {{ gift.stockQty }}
+          <select v-model.number="redeemForm.giftId" @change="syncRedeemFormWithGiftRule">
+            <option v-for="gift in availableRedeemGifts" :key="gift.id || gift.giftName" :value="gift.id || 0">
+              {{ gift.giftName }} / {{ gift.pointsCost }} 分
+              {{ gift.uniquePerMember ? " / 限兑一次" : "" }}
             </option>
           </select>
         </label>
         <label class="field">
           <span class="label">数量</span>
-          <input v-model.number="redeemForm.qty" type="number" min="1" />
+          <input
+            v-model.number="redeemForm.qty"
+            type="number"
+            min="1"
+            :max="selectedRedeemGift?.uniquePerMember ? 1 : undefined"
+            :disabled="selectedRedeemGift?.uniquePerMember"
+          />
         </label>
         <label class="field">
           <span class="label">操作人</span>
@@ -199,6 +209,7 @@ onMounted(() => {
           <textarea v-model="redeemForm.remark" />
         </label>
       </div>
+      <div v-if="selectedRedeemGift?.uniquePerMember" class="notice">该礼品为唯一兑换，每位会员仅可兑换一次。</div>
       <div class="toolbar">
         <button class="primary-button" type="button" @click="saveRedeem">提交兑换</button>
       </div>
