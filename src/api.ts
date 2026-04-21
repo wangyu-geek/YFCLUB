@@ -92,6 +92,10 @@ export function migrationGetReport(batchNo: string) {
   return invoke<MigrationReport>("migration_get_report", { batchNo });
 }
 
+export function migrationExport(targetPath: string) {
+  return invoke<CommandResult>("migration_export", { targetPath });
+}
+
 export function operationLogsQuery(filter: OperationLogFilter) {
   return invoke<OperationLogItem[]>("operation_logs_query", { filter });
 }

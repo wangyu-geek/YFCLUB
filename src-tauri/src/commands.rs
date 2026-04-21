@@ -11,7 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde_json::json;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     path::{PathBuf},
 };
@@ -154,6 +154,14 @@ pub fn migration_get_report(
 ) -> Result<MigrationReport, String> {
     migration_get_report_impl(&state, batch_no)
         .map_err(|err| map_command_error(&state, "migration_get_report", err))
+}
+
+#[tauri::command]
+pub fn migration_export(
+    state: tauri::State<'_, AppState>,
+    target_path: String,
+) -> Result<CommandResult, String> {
+    migration_export_impl(&state, target_path).map_err(|err| map_command_error(&state, "migration_export", err))
 }
 
 #[tauri::command]
@@ -1266,6 +1274,223 @@ fn migration_get_report_impl(state: &AppState, batch_no: String) -> Result<Migra
     }
 
     Ok(MigrationReport { batch, errors })
+}
+
+fn migration_export_impl(state: &AppState, target_path: String) -> Result<CommandResult> {
+    let target = PathBuf::from(target_path.trim());
+    if target.as_os_str().is_empty() {
+        return Err(anyhow!("导出文件路径不能为空"));
+    }
+
+    let conn = open_connection(&state.db_path)?;
+    let bundle = build_export_bundle(&conn, state)?;
+    ensure_parent_dir(&target)?;
+    fs::write(&target, serde_json::to_string_pretty(&bundle)?)?;
+
+    insert_operation_log(
+        &conn,
+        "管理员",
+        "migration",
+        "export",
+        Some("migrationFile"),
+        Some(&target.to_string_lossy()),
+        Some(&serde_json::to_string(&json!({
+            "memberCount": bundle.members.len(),
+            "consumptionCount": bundle.consumptions.len(),
+            "giftCount": bundle.gifts.len(),
+            "redemptionCount": bundle.redemptions.len()
+        }))?),
+        "SUCCESS",
+        None,
+    )?;
+    append_text_log(
+        &state.log_dir,
+        "app.log",
+        &format!("迁移数据导出成功: {}", target.display()),
+    )?;
+
+    Ok(CommandResult {
+        success: true,
+        message: format!("迁移文件已导出到 {}", target.display()),
+        target_id: Some(target.to_string_lossy().to_string()),
+    })
+}
+
+fn build_export_bundle(conn: &Connection, state: &AppState) -> Result<ImportBundle> {
+    let settings = load_settings(conn, state)?;
+    let gifts = query_export_gifts(conn)?;
+    let gift_legacy_map = gifts
+        .iter()
+        .filter_map(|item| {
+            item.legacy_pk
+                .as_ref()
+                .and_then(|legacy_pk| legacy_pk.strip_prefix("gift-")?.parse::<i64>().ok().map(|id| (id, legacy_pk.clone())))
+        })
+        .collect::<HashMap<_, _>>();
+    let member_legacy_map = query_export_member_legacy_map(conn)?;
+
+    Ok(ImportBundle {
+        source_version: Some("yfclub-export-1".to_string()),
+        members: query_export_members(conn)?,
+        consumptions: query_export_consumptions(conn, &member_legacy_map)?,
+        gifts,
+        redemptions: query_export_redemptions(conn, &member_legacy_map, &gift_legacy_map)?,
+        settings: Some(ImportSettings {
+            store_name: Some(settings.store_name),
+            points_rule_amount: Some(settings.points_rule_amount),
+            legacy_jpdj: Some(settings.legacy_jpdj),
+            default_operator: Some(settings.default_operator),
+        }),
+    })
+}
+
+fn query_export_member_legacy_map(conn: &Connection) -> Result<HashMap<i64, String>> {
+    let mut stmt =
+        conn.prepare("SELECT id, COALESCE(NULLIF(legacy_member_id, ''), 'member-' || id) FROM members")?;
+    let rows = stmt.query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))?;
+    let mut items = HashMap::new();
+    for row in rows {
+        let (member_id, legacy_pk) = row?;
+        items.insert(member_id, legacy_pk);
+    }
+    Ok(items)
+}
+
+fn query_export_members(conn: &Connection) -> Result<Vec<ImportMember>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, member_no, name, gender, birth_month, birth_day, mobile, points_balance, total_spent, last_consume_at, remark,
+                NULLIF(legacy_member_id, '')
+         FROM members
+         ORDER BY member_no ASC, id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let member_id = row.get::<_, i64>(0)?;
+        let legacy_pk = row
+            .get::<_, Option<String>>(11)?
+            .unwrap_or_else(|| format!("member-{}", member_id));
+        Ok(ImportMember {
+            legacy_pk,
+            member_no: Some(row.get(1)?),
+            name: row.get(2)?,
+            gender: row.get(3)?,
+            birth_month: row.get(4)?,
+            birth_day: row.get(5)?,
+            mobile: row.get(6)?,
+            points_balance: Some(row.get(7)?),
+            total_spent: Some(row.get(8)?),
+            last_consume_at: row.get(9)?,
+            remark: row.get(10)?,
+        })
+    })?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
+}
+
+fn query_export_consumptions(
+    conn: &Connection,
+    member_legacy_map: &HashMap<i64, String>,
+) -> Result<Vec<ImportConsumption>> {
+    let mut stmt = conn.prepare(
+        "SELECT record_no, member_id, amount, points_added, operator_name, remark, legacy_record_id, created_at
+         FROM consumption_records
+         ORDER BY created_at ASC, id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let record_no = row.get::<_, String>(0)?;
+        let member_id = row.get::<_, i64>(1)?;
+        let member_legacy_pk = member_legacy_map
+            .get(&member_id)
+            .cloned()
+            .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+        let legacy_pk = row
+            .get::<_, Option<String>>(6)?
+            .unwrap_or_else(|| format!("consume-{}", record_no));
+        Ok(ImportConsumption {
+            legacy_pk,
+            member_legacy_pk,
+            amount: row.get(2)?,
+            points_added: Some(row.get(3)?),
+            operator_name: row.get(4)?,
+            remark: row.get(5)?,
+            created_at: row.get(7)?,
+        })
+    })?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
+}
+
+fn query_export_gifts(conn: &Connection) -> Result<Vec<ImportGift>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, gift_name, points_cost, stock_qty, status, unique_per_member, remark
+         FROM gifts
+         ORDER BY status = 'ACTIVE' DESC, updated_at DESC, id DESC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let gift_id = row.get::<_, i64>(0)?;
+        Ok(ImportGift {
+            legacy_pk: Some(format!("gift-{}", gift_id)),
+            gift_name: row.get(1)?,
+            points_cost: row.get(2)?,
+            stock_qty: Some(row.get(3)?),
+            status: Some(row.get(4)?),
+            unique_per_member: Some(row.get::<_, i64>(5)? != 0),
+            remark: row.get(6)?,
+        })
+    })?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
+}
+
+fn query_export_redemptions(
+    conn: &Connection,
+    member_legacy_map: &HashMap<i64, String>,
+    gift_legacy_map: &HashMap<i64, String>,
+) -> Result<Vec<ImportRedemption>> {
+    let mut stmt = conn.prepare(
+        "SELECT redeem_no, member_id, gift_id, gift_name_snapshot, qty, points_used, operator_name, remark, legacy_redemption_id, created_at
+         FROM gift_redemptions
+         ORDER BY created_at ASC, id ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        let redeem_no = row.get::<_, String>(0)?;
+        let member_id = row.get::<_, i64>(1)?;
+        let member_legacy_pk = member_legacy_map
+            .get(&member_id)
+            .cloned()
+            .ok_or_else(|| rusqlite::Error::QueryReturnedNoRows)?;
+        let gift_legacy_pk = row
+            .get::<_, Option<i64>>(2)?
+            .map(|gift_id| gift_legacy_map.get(&gift_id).cloned().unwrap_or_else(|| format!("gift-{}", gift_id)));
+        let legacy_pk = row
+            .get::<_, Option<String>>(8)?
+            .unwrap_or_else(|| format!("redeem-{}", redeem_no));
+
+        Ok(ImportRedemption {
+            legacy_pk,
+            member_legacy_pk,
+            gift_legacy_pk,
+            gift_name: row.get(3)?,
+            qty: Some(row.get(4)?),
+            points_used: Some(row.get(5)?),
+            operator_name: row.get(6)?,
+            remark: row.get(7)?,
+            created_at: row.get(9)?,
+        })
+    })?;
+    let mut items = Vec::new();
+    for row in rows {
+        items.push(row?);
+    }
+    Ok(items)
 }
 
 fn operation_logs_query_impl(state: &AppState, filter: OperationLogFilter) -> Result<Vec<OperationLogItem>> {

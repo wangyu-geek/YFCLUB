@@ -4,6 +4,7 @@ import { useClubAppContext } from "../composables/useClubApp";
 const {
   migrationSourcePath,
   chooseMigrationFile,
+  exportMigrationFile,
   runMigrationPrecheck,
   precheck,
   executeMigrationRun,
@@ -28,6 +29,7 @@ const {
       </div>
       <div class="toolbar">
         <button class="ghost-button" type="button" @click="chooseMigrationFile">选择文件</button>
+        <button class="ghost-button" type="button" @click="exportMigrationFile">导出文件</button>
         <button class="secondary-button" type="button" @click="runMigrationPrecheck">执行预检</button>
         <button class="primary-button" type="button" :disabled="!precheck?.canExecute" @click="executeMigrationRun">
           正式导入

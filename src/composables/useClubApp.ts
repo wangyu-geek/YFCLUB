@@ -1,5 +1,5 @@
 import { computed, inject, ref, type InjectionKey } from "vue";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { formatCodeLabel, formatGiftStatusLabel, localizeOperationLogItem } from "../localization";
 import {
   backupCreate,
@@ -14,6 +14,7 @@ import {
   memberSearch,
   memberUpdate,
   migrationExecute,
+  migrationExport,
   migrationGetReport,
   migrationPrecheck,
   operationLogsQuery,
@@ -445,6 +446,23 @@ export function useClubApp() {
     }
   }
 
+  async function exportMigrationFile() {
+    const result = await save({
+      title: "导出迁移文件",
+      defaultPath: `migration-export-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: "JSON", extensions: ["json"] }]
+    });
+    if (typeof result !== "string" || !result) return;
+
+    try {
+      clearMessages();
+      const commandResult = await migrationExport(result);
+      setSuccess(commandResult.message);
+    } catch (error) {
+      setError(error);
+    }
+  }
+
   async function runMigrationPrecheck() {
     if (!migrationSourcePath.value) return;
     try {
@@ -528,6 +546,7 @@ export function useClubApp() {
     chooseRestoreFile,
     restoreFromBackup,
     chooseMigrationFile,
+    exportMigrationFile,
     runMigrationPrecheck,
     executeMigrationRun
   };

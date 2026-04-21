@@ -31,6 +31,7 @@ fn main() {
             commands::migration_precheck,
             commands::migration_execute,
             commands::migration_get_report,
+            commands::migration_export,
             commands::operation_logs_query
         ])
         .run(tauri::generate_context!())
