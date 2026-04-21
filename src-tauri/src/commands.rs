@@ -263,6 +263,8 @@ fn member_create_impl(state: &AppState, payload: MemberFormPayload) -> Result<Co
     if name.is_empty() {
         return Err(anyhow!("会员姓名不能为空"));
     }
+    let birth_month = validate_member_birth_part("生日月", payload.birth_month.clone(), 1, 12)?;
+    let birth_day = validate_member_birth_part("生日日", payload.birth_day.clone(), 1, 31)?;
 
     let mut conn = open_connection(&state.db_path)?;
     let tx = conn.transaction()?;
@@ -289,8 +291,8 @@ fn member_create_impl(state: &AppState, payload: MemberFormPayload) -> Result<Co
             member_no,
             name,
             normalize_optional_text(payload.gender),
-            normalize_optional_text(payload.birth_month),
-            normalize_optional_text(payload.birth_day),
+            birth_month,
+            birth_day,
             normalize_optional_text(payload.mobile),
             name_pinyin,
             name_initials,
@@ -331,6 +333,8 @@ fn member_update_impl(state: &AppState, member_id: i64, payload: MemberFormPaylo
     if name.is_empty() {
         return Err(anyhow!("会员姓名不能为空"));
     }
+    let birth_month = validate_member_birth_part("生日月", payload.birth_month.clone(), 1, 12)?;
+    let birth_day = validate_member_birth_part("生日日", payload.birth_day.clone(), 1, 31)?;
 
     let mut conn = open_connection(&state.db_path)?;
     let tx = conn.transaction()?;
@@ -362,8 +366,8 @@ fn member_update_impl(state: &AppState, member_id: i64, payload: MemberFormPaylo
             member_no,
             name,
             normalize_optional_text(payload.gender),
-            normalize_optional_text(payload.birth_month),
-            normalize_optional_text(payload.birth_day),
+            birth_month,
+            birth_day,
             normalize_optional_text(payload.mobile),
             name_pinyin,
             name_initials,
@@ -395,6 +399,27 @@ fn member_update_impl(state: &AppState, member_id: i64, payload: MemberFormPaylo
         message: "会员资料已更新".to_string(),
         target_id: Some(member_id.to_string()),
     })
+}
+
+fn validate_member_birth_part(
+    label: &str,
+    value: Option<String>,
+    min: i64,
+    max: i64,
+) -> Result<Option<String>> {
+    let Some(text) = normalize_optional_text(value) else {
+        return Ok(None);
+    };
+    if !text.chars().all(|ch| ch.is_ascii_digit()) {
+        return Err(anyhow!("{label}必须为数字"));
+    }
+    let parsed: i64 = text
+        .parse()
+        .map_err(|_| anyhow!("{label}格式不正确"))?;
+    if parsed < min || parsed > max {
+        return Err(anyhow!("{label}必须在 {min} 到 {max} 之间"));
+    }
+    Ok(Some(format!("{parsed:02}")))
 }
 
 fn member_disable_impl(state: &AppState, member_id: i64) -> Result<CommandResult> {

@@ -37,6 +37,12 @@ const activeSectionMeta = computed(
   () => sectionOptions.find((item) => item.key === route.name) ?? sectionOptions[0]
 );
 
+function sanitizeBirthdayInput(value: string | null | undefined, maxLength = 2) {
+  return String(value ?? "")
+    .replace(/\D/g, "")
+    .slice(0, maxLength);
+}
+
 onMounted(() => {
   void app.bootstrap();
 });
@@ -135,11 +141,25 @@ onMounted(() => {
         </label>
         <label class="field">
           <span class="label">生日月</span>
-          <input v-model="memberForm.birthMonth" placeholder="如 05" />
+          <input
+            v-model="memberForm.birthMonth"
+            type="text"
+            inputmode="numeric"
+            maxlength="2"
+            placeholder="如 05"
+            @input="memberForm.birthMonth = sanitizeBirthdayInput(memberForm.birthMonth)"
+          />
         </label>
         <label class="field">
           <span class="label">生日日</span>
-          <input v-model="memberForm.birthDay" placeholder="如 12" />
+          <input
+            v-model="memberForm.birthDay"
+            type="text"
+            inputmode="numeric"
+            maxlength="2"
+            placeholder="如 12"
+            @input="memberForm.birthDay = sanitizeBirthdayInput(memberForm.birthDay)"
+          />
         </label>
         <label class="field full">
           <span class="label">备注</span>
