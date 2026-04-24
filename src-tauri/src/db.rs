@@ -1,6 +1,6 @@
 use crate::{
     models::SettingsData,
-    state::{load_or_create_config, resolve_path, save_config, settings_from_config, AppConfig, AppState},
+    state::{load_or_create_config, path_to_config_value, resolve_path, save_config, settings_from_config, AppConfig, AppState},
     utils::now_string,
 };
 use anyhow::{Context, Result};
@@ -183,8 +183,8 @@ pub fn persist_settings(conn: &Connection, state: &AppState, payload: &SettingsD
 
     let config = AppConfig {
         store_name: payload.store_name.clone(),
-        db_path: state.db_path.to_string_lossy().to_string(),
-        backup_path: payload.backup_path.clone(),
+        db_path: path_to_config_value(&state.root_dir, &state.db_path),
+        backup_path: path_to_config_value(&state.root_dir, Path::new(&payload.backup_path)),
         auto_backup_enabled: payload.auto_backup_enabled,
         points_rule_amount: payload.points_rule_amount,
         legacy: crate::state::LegacyConfig {

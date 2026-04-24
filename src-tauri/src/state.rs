@@ -6,6 +6,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+pub const DEFAULT_DB_PATH: &str = "data/club.db";
+pub const DEFAULT_BACKUP_PATH: &str = "data/backup";
+
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub root_dir: PathBuf,
@@ -65,16 +68,19 @@ pub fn load_or_create_config(root_dir: &Path, config_path: &Path) -> Result<AppC
     if config_path.exists() {
         let content = fs::read_to_string(config_path)
             .with_context(|| format!("读取配置文件失败: {}", config_path.display()))?;
-        let config: AppConfig = serde_json::from_str(&content)
+        let mut config: AppConfig = serde_json::from_str(&content)
             .with_context(|| format!("解析配置文件失败: {}", config_path.display()))?;
+        if normalize_config_paths(&mut config) {
+            save_config(config_path, &config)?;
+        }
         return Ok(config);
     }
 
     let legacy_jpdj = read_legacy_jpdj(root_dir).unwrap_or_else(|| "10".to_string());
     let config = AppConfig {
         store_name: "永丰文体".to_string(),
-        db_path: "data/club.db".to_string(),
-        backup_path: "data/backup".to_string(),
+        db_path: DEFAULT_DB_PATH.to_string(),
+        backup_path: DEFAULT_BACKUP_PATH.to_string(),
         auto_backup_enabled: true,
         points_rule_amount: legacy_jpdj.parse().unwrap_or(10),
         legacy: LegacyConfig {
@@ -90,6 +96,16 @@ pub fn save_config(config_path: &Path, config: &AppConfig) -> Result<()> {
     let json = serde_json::to_string_pretty(config)?;
     fs::write(config_path, json)
         .with_context(|| format!("写入配置文件失败: {}", config_path.display()))
+}
+
+pub fn path_to_config_value(root_dir: &Path, path: &Path) -> String {
+    let candidate = if path.is_absolute() {
+        path.strip_prefix(root_dir).unwrap_or(path).to_path_buf()
+    } else {
+        path.to_path_buf()
+    };
+
+    candidate.to_string_lossy().replace('\\', "/")
 }
 
 pub fn resolve_path(root_dir: &Path, raw: &str) -> PathBuf {
@@ -147,4 +163,30 @@ fn read_legacy_jpdj(root_dir: &Path) -> Option<String> {
         return None;
     }
     Some(content[start + 6..end].trim().to_string())
+}
+
+fn normalize_config_paths(config: &mut AppConfig) -> bool {
+    let normalized_db_path = normalize_portable_path(&config.db_path, DEFAULT_DB_PATH);
+    let normalized_backup_path = normalize_portable_path(&config.backup_path, DEFAULT_BACKUP_PATH);
+
+    let changed = normalized_db_path != config.db_path || normalized_backup_path != config.backup_path;
+    if changed {
+        config.db_path = normalized_db_path;
+        config.backup_path = normalized_backup_path;
+    }
+
+    changed
+}
+
+fn normalize_portable_path(raw: &str, portable_relative: &str) -> String {
+    let candidate = PathBuf::from(raw);
+    if candidate.is_absolute() && candidate.ends_with(Path::new(portable_relative)) {
+        return portable_relative.to_string();
+    }
+
+    if candidate.is_relative() {
+        return candidate.to_string_lossy().replace('\\', "/");
+    }
+
+    raw.to_string()
 }

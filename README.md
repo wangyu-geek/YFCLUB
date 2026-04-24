@@ -22,6 +22,14 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
+生成不带运行数据的 Windows 绿色版压缩包：
+
+```bash
+make portable
+```
+
+执行后会先构建 release 可执行文件，再输出绿色版 zip 到 `dist/portable/`。压缩包默认不包含当前环境里的 `data/`、`config/`、`logs/` 内容，首次启动时会自动创建干净目录。
+
 ## 目录说明
 
 - `src/`：Vue 前端页面与交互逻辑

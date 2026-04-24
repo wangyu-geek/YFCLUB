@@ -1,14 +1,22 @@
-.PHONY: build release run clean-db clean-database
+.PHONY: build release portable portable-zip run clean-db clean-database
 
 NPM ?= npm
 POWERSHELL ?= powershell -NoProfile -ExecutionPolicy Bypass -Command
 DB_FILE ?= data/club.db
+TAURI_RELEASE_EXE ?= src-tauri/target/release/member-club.exe
+PORTABLE_OUTPUT_DIR ?= dist/portable
 
 build:
 	$(NPM) run build
 
 release:
 	$(NPM) run tauri:build
+
+portable:
+	$(NPM) run tauri:build -- --no-bundle
+	$(POWERSHELL) '& "./scripts/package-windows-portable.ps1" -SourceExe "$(TAURI_RELEASE_EXE)" -OutputDir "$(PORTABLE_OUTPUT_DIR)"'
+
+portable-zip: portable
 
 run:
 	$(NPM) run tauri:dev
