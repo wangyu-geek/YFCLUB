@@ -559,7 +559,7 @@ fn consume_create_impl(state: &AppState, payload: ConsumePayload) -> Result<Comm
 fn gift_list_impl(state: &AppState) -> Result<Vec<GiftRecord>> {
     let conn = open_connection(&state.db_path)?;
     let mut stmt = conn.prepare(
-        "SELECT id, gift_name, points_cost, stock_qty, status, unique_per_member, remark, created_at, updated_at
+        "SELECT id, gift_name, points_cost, status, unique_per_member, remark, created_at, updated_at
          FROM gifts
          ORDER BY status = 'ACTIVE' DESC, updated_at DESC, id DESC",
     )?;
@@ -568,12 +568,11 @@ fn gift_list_impl(state: &AppState) -> Result<Vec<GiftRecord>> {
             id: Some(row.get(0)?),
             gift_name: row.get(1)?,
             points_cost: row.get(2)?,
-            stock_qty: row.get(3)?,
-            status: Some(row.get(4)?),
-            unique_per_member: Some(row.get::<_, i64>(5)? != 0),
-            remark: row.get(6)?,
-            created_at: Some(row.get(7)?),
-            updated_at: Some(row.get(8)?),
+            status: Some(row.get(3)?),
+            unique_per_member: Some(row.get::<_, i64>(4)? != 0),
+            remark: row.get(5)?,
+            created_at: Some(row.get(6)?),
+            updated_at: Some(row.get(7)?),
         })
     })?;
     let mut items = Vec::new();
@@ -597,12 +596,11 @@ fn gift_save_impl(state: &AppState, payload: GiftRecord) -> Result<CommandResult
     let gift_id = if let Some(id) = payload.id {
         tx.execute(
             "UPDATE gifts
-             SET gift_name = ?1, points_cost = ?2, stock_qty = ?3, status = ?4, unique_per_member = ?5, remark = ?6, updated_at = ?7
-             WHERE id = ?8",
+             SET gift_name = ?1, points_cost = ?2, status = ?3, unique_per_member = ?4, remark = ?5, updated_at = ?6
+             WHERE id = ?7",
             params![
                 payload.gift_name.trim(),
                 payload.points_cost,
-                payload.stock_qty,
                 payload.status.clone().unwrap_or_else(|| "ACTIVE".to_string()),
                 if payload.unique_per_member.unwrap_or(false) { 1 } else { 0 },
                 normalize_optional_text(payload.remark.clone()),
@@ -613,12 +611,11 @@ fn gift_save_impl(state: &AppState, payload: GiftRecord) -> Result<CommandResult
         id
     } else {
         tx.execute(
-            "INSERT INTO gifts(gift_name, points_cost, stock_qty, status, unique_per_member, remark, created_at, updated_at)
-             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+            "INSERT INTO gifts(gift_name, points_cost, status, unique_per_member, remark, created_at, updated_at)
+             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)",
             params![
                 payload.gift_name.trim(),
                 payload.points_cost,
-                payload.stock_qty,
                 payload.status.clone().unwrap_or_else(|| "ACTIVE".to_string()),
                 if payload.unique_per_member.unwrap_or(false) { 1 } else { 0 },
                 normalize_optional_text(payload.remark.clone()),
@@ -1427,7 +1424,7 @@ fn query_export_consumptions(
 
 fn query_export_gifts(conn: &Connection) -> Result<Vec<ImportGift>> {
     let mut stmt = conn.prepare(
-        "SELECT id, gift_name, points_cost, stock_qty, status, unique_per_member, remark
+        "SELECT id, gift_name, points_cost, status, unique_per_member, remark
          FROM gifts
          ORDER BY status = 'ACTIVE' DESC, updated_at DESC, id DESC",
     )?;
@@ -1437,10 +1434,9 @@ fn query_export_gifts(conn: &Connection) -> Result<Vec<ImportGift>> {
             legacy_pk: Some(format!("gift-{}", gift_id)),
             gift_name: row.get(1)?,
             points_cost: row.get(2)?,
-            stock_qty: Some(row.get(3)?),
-            status: Some(row.get(4)?),
-            unique_per_member: Some(row.get::<_, i64>(5)? != 0),
-            remark: row.get(6)?,
+            status: Some(row.get(3)?),
+            unique_per_member: Some(row.get::<_, i64>(4)? != 0),
+            remark: row.get(5)?,
         })
     })?;
     let mut items = Vec::new();
@@ -1876,12 +1872,11 @@ fn import_gift(tx: &Transaction<'_>, batch_no: &str, ctx: &mut ImportContext, gi
     }
 
     tx.execute(
-        "INSERT INTO gifts(gift_name, points_cost, stock_qty, status, unique_per_member, remark, created_at, updated_at)
-         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        "INSERT INTO gifts(gift_name, points_cost, status, unique_per_member, remark, created_at, updated_at)
+         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?6)",
         params![
             gift.gift_name.trim(),
             gift.points_cost,
-            gift.stock_qty.unwrap_or(0),
             gift.status.clone().unwrap_or_else(|| "ACTIVE".to_string()),
             if gift.unique_per_member.unwrap_or(false) { 1 } else { 0 },
             normalize_optional_text(gift.remark.clone()),

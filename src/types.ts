@@ -96,7 +96,6 @@ export interface GiftRecord {
   id?: number | null;
   giftName: string;
   pointsCost: number;
-  stockQty: number;
   status?: string;
   uniquePerMember?: boolean;
   remark?: string | null;

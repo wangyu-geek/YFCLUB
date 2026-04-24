@@ -80,7 +80,6 @@ pub struct GiftRecord {
     pub id: Option<i64>,
     pub gift_name: String,
     pub points_cost: i64,
-    pub stock_qty: i64,
     pub status: Option<String>,
     pub unique_per_member: Option<bool>,
     pub remark: Option<String>,
@@ -322,7 +321,6 @@ pub struct ImportGift {
     pub legacy_pk: Option<String>,
     pub gift_name: String,
     pub points_cost: i64,
-    pub stock_qty: Option<i64>,
     pub status: Option<String>,
     #[serde(alias = "unique_per_member")]
     pub unique_per_member: Option<bool>,

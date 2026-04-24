@@ -54,7 +54,6 @@ const summaryKeyLabels: Record<string, string> = {
   giftName: "礼品名称",
   giftId: "礼品 ID",
   pointsCost: "所需积分",
-  stockQty: "库存",
   status: "状态",
   uniquePerMember: "唯一兑换",
   remark: "备注",

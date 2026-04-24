@@ -98,7 +98,6 @@ export function useClubApp() {
     id: null,
     giftName: "",
     pointsCost: 0,
-    stockQty: 0,
     status: "ACTIVE",
     uniquePerMember: true,
     remark: ""
@@ -154,7 +153,6 @@ export function useClubApp() {
       id: null,
       giftName: "",
       pointsCost: 0,
-      stockQty: 0,
       status: "ACTIVE",
       uniquePerMember: true,
       remark: ""
@@ -366,8 +364,7 @@ export function useClubApp() {
     try {
       const result = await giftSave({
         ...giftForm.value,
-        pointsCost: Number(giftForm.value.pointsCost),
-        stockQty: Number(giftForm.value.stockQty)
+        pointsCost: Number(giftForm.value.pointsCost)
       });
       setSuccess(result.message);
       resetGiftForm();

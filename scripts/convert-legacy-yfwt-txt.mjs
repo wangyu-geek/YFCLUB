@@ -374,7 +374,6 @@ function main() {
     legacyPk: gift.legacyPk,
     giftName: gift.giftName,
     pointsCost: gift.pointsCost,
-    stockQty: 0,
     status: gift.status,
     uniquePerMember: gift.uniquePerMember,
     remark: gift.remark
